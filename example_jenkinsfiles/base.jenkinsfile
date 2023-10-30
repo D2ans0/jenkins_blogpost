@@ -1,0 +1,52 @@
+pipeline {
+    agent any
+
+    tools {
+        maven "393"
+    }
+
+    environment {
+        PROJECT_NAME="maven_project"
+        VERSION="4.0.18"
+        GIT_BRANCHES="*/master"
+		GIT_URL="x.y.z.250"
+        GIT_CREDENTIAL="git_ssh_key"
+        MAVEN_IGNORE_TESTS="true"
+        MAVEN_LIFECYCLES="clean install"
+        REGISTRY_URL="x.y.z.1:5000"
+        REGISTRY_TLS="false"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scmGit(
+                    branches: [[name: env.GIT_BRANCHES]],
+                    extensions: [],
+                    userRemoteConfigs: [[
+                        credentialsId: env.GIT_CREDENTIAL,
+                        url: "git@${GIT_URL}:${PROJECT_NAME}"
+                    ]]
+                )
+            }
+        }
+        stage('Build binary') {
+            steps {
+                sh "mvn -Dmaven.test.failure.ignore=${MAVEN_IGNORE_TESTS} ${MAVEN_LIFECYCLES}"
+            }
+        }
+        stage('Build image') {
+            steps {
+                sh "podman build . -t ${PROJECT_NAME}"
+                sh "podman tag ${PROJECT_NAME} ${REGISTRY_URL}/${PROJECT_NAME}:${VERSION}"
+                sh "podman tag ${PROJECT_NAME} ${REGISTRY_URL}/${PROJECT_NAME}:latest"
+            }
+        }
+        stage('Registry push') {
+            steps {
+                sh "podman push --tls-verify=${REGISTRY_TLS} ${REGISTRY_URL}/${PROJECT_NAME}:${VERSION}"
+                sh "podman push --tls-verify=${REGISTRY_TLS} ${REGISTRY_URL}/${PROJECT_NAME}:latest"
+            }
+        }
+    }
+}

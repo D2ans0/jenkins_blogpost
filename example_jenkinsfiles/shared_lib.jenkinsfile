@@ -1,0 +1,43 @@
+@Library('shared_library_example') _
+
+// setting variable maps
+def project = [
+	name: "maven_project",
+	version: "4.0.18",
+]
+def gitConfig = [
+	branches: "*/master",
+	repo: project.name,
+]
+def sourceBuild = [
+	type: "maven",
+	name: project.name,
+	version: project.version,
+	ignoreTests: true,
+	registryPush: true,
+]
+
+def dockerBuild = sourceBuild.getClass().newInstance(sourceBuild)
+dockerBuild.type = "docker"
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+	            script {libGit.checkout(gitConfig)}
+            }
+        }
+        stage('Build binary') {
+            steps {
+		        script {universalBuild(sourceBuild)}
+            }
+        }
+        stage('Build image') {
+            steps {
+	            script {universalBuild(dockerBuild)}
+            }
+        }
+    }
+}
